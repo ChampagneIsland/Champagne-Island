@@ -2,7 +2,7 @@
    New reviews are saved as "not approved". Tick "approved" in the
    Supabase Table Editor and the review appears on the homepage. */
 const SUPABASE_URL = "https://nbhkzsugpsoibvkbbnuo.supabase.co";
-const SUPABASE_ANON_KEY = "PASTE_YOUR_PUBLISHABLE_KEY_HERE"; // sb_publishable_... (safe to be public)
+const SUPABASE_ANON_KEY = "sb_publishable_ZcV7RPh7XJthw6frk32TZQ_oWxEWQpR"; // sb_publishable_... (safe to be public)
 
 (() => {
   const API = SUPABASE_URL + "/rest/v1/reviews";
