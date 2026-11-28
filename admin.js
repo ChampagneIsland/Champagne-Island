@@ -1,160 +1,314 @@
-/* Champagne Island owner page: sign in with a username, then approve,
-   hide or delete guest reviews. The database (Row Level Security) checks
-   every action, so this page cannot do anything without a valid owner login. */
+/* Champagne Island owner page.
+   Sign in with a username, then manage bookings, reviews, closed days and site text.
+   The database (Row Level Security) checks every action:
+   owner = everything; staff = bookings (see, confirm/decline, check in) + approve reviews. */
 (() => {
   const cfg = window.CI_SUPABASE || {};
   const URL_ = cfg.url, KEY = cfg.key;
   const [BOX, DOMAIN] = (cfg.loginEmail || "champagneisland1@gmail.com").split("@");
   const STORE = "ci-owner-session";
-  const $ = s => document.querySelector(s);
-  const loginView = $("#login"), appView = $("#app"), loginForm = $("#login-form"), loginMsg = $("#login-msg");
-  const list = $("#list"), note = $("#note");
-  let session = null, tab = "new", reviews = [];
+  const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+  const loginMsg = $("#login-msg"), note = $("#note");
+  let session = null, me = { username: "", role: "staff" }, section = "bookings";
+  let bookings = [], reviews = [], closedDays = [], content = {};
+  let bTab = "requests", rTab = "new";
 
-  /* ---------- session storage (safe if storage is blocked) ---------- */
+  /* ---------- helpers ---------- */
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const pad = n => String(n).padStart(2, "0");
+  const isoDay = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const today = () => isoDay(new Date());
+  const addDays = (s, n) => { const d = new Date(s + "T12:00:00"); d.setDate(d.getDate() + n); return isoDay(d); };
+  const niceDay = s => new Date(s + "T12:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  const niceTime = s => { const d = new Date(s); return isNaN(d) ? "" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" }); };
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const ym = v => { const m = /^(\d{4})-(\d{2})$/.exec(v || ""); return m ? months[+m[2] - 1] + " " + m[1] : v || ""; };
+  const say = (msg, bad) => { note.textContent = msg; note.className = "note" + (bad ? " bad" : ""); note.hidden = false; clearTimeout(say.t); say.t = setTimeout(() => note.hidden = true, 4000); };
+  const isOwner = () => me.role === "owner";
   const save = s => { session = s; try { s ? localStorage.setItem(STORE, JSON.stringify(s)) : localStorage.removeItem(STORE); } catch (e) {} };
   const restore = () => { try { return JSON.parse(localStorage.getItem(STORE) || "null"); } catch (e) { return null; } };
+  function twoTap(btn, label, run) {
+    btn.onclick = () => {
+      if (btn.dataset.armed !== "1") { btn.dataset.armed = "1"; btn.textContent = "Tap again to " + label.toLowerCase(); setTimeout(() => { btn.dataset.armed = ""; btn.textContent = label; }, 3500); return; }
+      run();
+    };
+  }
 
-  /* ---------- Supabase Auth (plain fetch, no library) ---------- */
+  /* ---------- Supabase Auth + database ---------- */
   async function auth(grant, body) {
-    const res = await fetch(`${URL_}/auth/v1/token?grant_type=${grant}`, {
-      method: "POST", headers: { apikey: KEY, "Content-Type": "application/json" }, body: JSON.stringify(body)
-    });
+    const res = await fetch(`${URL_}/auth/v1/token?grant_type=${grant}`, { method: "POST", headers: { apikey: KEY, "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) { const err = new Error(data.error_description || data.msg || "Sign-in failed"); err.status = res.status; throw err; }
-    return { access_token: data.access_token, refresh_token: data.refresh_token,
-             expires_at: data.expires_at || Math.floor(Date.now() / 1000) + (data.expires_in || 3600) };
+    if (!res.ok) throw Object.assign(new Error(data.error_description || data.msg || "Sign-in failed"), { status: res.status });
+    return { access_token: data.access_token, refresh_token: data.refresh_token, expires_at: data.expires_at || Math.floor(Date.now() / 1000) + (data.expires_in || 3600) };
   }
   async function freshToken() {
     if (!session) throw Object.assign(new Error("signed out"), { status: 401 });
     if (session.expires_at * 1000 - Date.now() < 60000) save(await auth("refresh_token", { refresh_token: session.refresh_token }));
     return session.access_token;
   }
-
-  /* ---------- database calls ---------- */
   async function db(path, opts = {}, retry = true) {
     const token = await freshToken();
-    const res = await fetch(`${URL_}/rest/v1/${path}`, { ...opts,
-      headers: { apikey: KEY, Authorization: "Bearer " + token, "Content-Type": "application/json", ...(opts.headers || {}) } });
+    const res = await fetch(`${URL_}/rest/v1/${path}`, { ...opts, headers: { apikey: KEY, Authorization: "Bearer " + token, "Content-Type": "application/json", ...(opts.headers || {}) } });
     if (res.status === 401 && retry) { session.expires_at = 0; return db(path, opts, false); }
-    if (!res.ok) throw Object.assign(new Error("Database error " + res.status), { status: res.status });
+    if (!res.ok) { const b = await res.json().catch(() => ({})); throw Object.assign(new Error(b.message || "Database error " + res.status), { status: res.status, code: b.code }); }
     return res.status === 204 ? null : res.json();
+  }
+  const change = (path, method, body) => db(path, { method, headers: { Prefer: "return=representation" }, body: body ? JSON.stringify(body) : undefined })
+    .then(rows => { if (!rows || !rows.length) throw new Error("Nothing changed"); return rows; });
+  function failed(err) {
+    if (err.status === 401) { signedOut("Please sign in again."); return; }
+    say(err.code === "23505" ? "That already exists." : "That didn't work. Refresh and try again.", true);
   }
 
   /* ---------- sign in / out ---------- */
-  function show(signedIn) { loginView.hidden = signedIn; appView.hidden = !signedIn; $("#whoami").hidden = !signedIn; }
+  function show(signedIn) { $("#login").hidden = signedIn; $("#app").hidden = !signedIn; $("#whoami").hidden = !signedIn; }
   function loginError(msg) { loginMsg.textContent = msg; loginMsg.hidden = false; }
+  function signedOut(msg) { save(null); show(false); if (msg) loginError(msg); }
 
-  loginForm.addEventListener("submit", async e => {
-    e.preventDefault();
-    loginMsg.hidden = true;
-    let user = $("#username").value.trim().toLowerCase();
-    const pass = $("#password").value;
+  $("#login-form").addEventListener("submit", async e => {
+    e.preventDefault(); loginMsg.hidden = true;
+    const user = $("#username").value.trim().toLowerCase(), pass = $("#password").value;
     if (!user || !pass) return loginError("Enter your username and password.");
     if (user.includes("@")) return loginError("Enter your username only, not an email address.");
-    {
-      if (!/^[a-z0-9._-]+$/.test(user)) return loginError("Usernames only use letters, numbers, dots, dashes and underscores.");
-      user = BOX + "+" + user + "@" + DOMAIN;
-    }
-    const btn = loginForm.querySelector("button"); btn.disabled = true; btn.textContent = "Signing in...";
-    try {
-      save(await auth("password", { email: user, password: pass }));
-      $("#password").value = "";
-      await start();
-    } catch (err) {
+    if (!/^[a-z0-9._-]+$/.test(user)) return loginError("Usernames only use letters, numbers, dots, dashes and underscores.");
+    const btn = $("#login-form button"); btn.disabled = true; btn.textContent = "Signing in...";
+    try { save(await auth("password", { email: `${BOX}+${user}@${DOMAIN}`, password: pass })); $("#password").value = ""; await start(); }
+    catch (err) {
       save(null);
-      loginError(err.status === 400 || err.status === 401 ? "Wrong username or password."
-        : err.status === 429 ? "Too many tries. Wait a few minutes and try again."
-        : "Could not reach the database. Check your internet and try again.");
+      loginError(err.status === 400 || err.status === 401 ? "Wrong username or password." : err.status === 429 ? "Too many tries. Wait a few minutes and try again." : "Could not reach the database. Check your internet and try again.");
     } finally { btn.disabled = false; btn.textContent = "Sign in"; }
   });
-
   $("#signout").addEventListener("click", async () => {
     try { if (session) await fetch(`${URL_}/auth/v1/logout`, { method: "POST", headers: { apikey: KEY, Authorization: "Bearer " + session.access_token } }); } catch (e) {}
-    save(null); reviews = []; show(false);
+    save(null); bookings = reviews = closedDays = []; show(false);
   });
 
-  /* ---------- reviews ---------- */
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const visit = v => { const m = /^(\d{4})-(\d{2})$/.exec(v || ""); return m ? months[+m[2] - 1] + " " + m[1] : v || ""; };
-  const sent = iso => { const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }); };
-  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-  const say = (msg, bad) => { note.textContent = msg; note.className = "note" + (bad ? " bad" : ""); note.hidden = false; clearTimeout(say.t); say.t = setTimeout(() => note.hidden = true, 4000); };
+  /* ---------- sections ---------- */
+  function go(name) {
+    if (!isOwner() && (name === "closed" || name === "content")) name = "bookings";
+    section = name;
+    $$(".snav button").forEach(b => b.setAttribute("aria-current", b.dataset.sec === name ? "page" : "false"));
+    $$(".sec").forEach(s => s.hidden = s.id !== "sec-" + name);
+    render();
+  }
+  $$(".snav button").forEach(b => b.onclick = () => go(b.dataset.sec));
+  $("#refresh").onclick = () => loadAll();
 
-  async function load() {
-    list.replaceChildren(el("p", "empty", "Loading reviews..."));
+  async function loadAll() {
+    const since = addDays(today(), -90);
     try {
-      reviews = await db("reviews?select=id,created_at,rating,review,first_name,city_country,visit_date,service,contact,approved&order=created_at.desc");
-      render();
+      const [b, r, c, s] = await Promise.all([
+        db(`bookings?select=id,ref,created_at,service,visit_date,nights,group_size,name,phone,email,notes,status,updated_at,handled_by&visit_date=gte.${since}&order=visit_date.asc,created_at.asc`),
+        db("reviews?select=id,created_at,rating,review,first_name,city_country,visit_date,service,contact,approved&order=created_at.desc"),
+        db(`closed_days?select=day,note&day=gte.${today()}&order=day`),
+        isOwner() ? db("site_content?select=key,value,updated_at,updated_by") : Promise.resolve([])
+      ]);
+      bookings = b; reviews = r; closedDays = c; content = {}; s.forEach(x => content[x.key] = x);
+      render(); if (isOwner()) fillContent();
     } catch (err) {
-      if (err.status === 401) { save(null); show(false); return loginError("Please sign in again."); }
-      list.replaceChildren(el("p", "empty", "Could not load reviews. Check your internet and press Refresh."));
+      if (err.status === 401) return signedOut("Please sign in again.");
+      say("Could not load everything. Check your internet and press Refresh.", true);
     }
   }
 
   function render() {
-    const waiting = reviews.filter(r => !r.approved), live = reviews.filter(r => r.approved);
-    $("#count-new").textContent = waiting.length; $("#count-live").textContent = live.length;
-    document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === tab));
-    const show_ = tab === "new" ? waiting : live;
-    if (!show_.length) {
-      list.replaceChildren(el("p", "empty", tab === "new" ? "No new reviews right now. New ones will show up here." : "No reviews on the website yet. Approve one from New reviews."));
-      return;
-    }
-    list.replaceChildren(...show_.map(card));
+    const pending = bookings.filter(b => b.status === "pending").length, newRev = reviews.filter(r => !r.approved).length;
+    $("#n-bookings").textContent = pending; $("#n-bookings").hidden = !pending;
+    $("#n-reviews").textContent = newRev; $("#n-reviews").hidden = !newRev;
+    if (section === "bookings") renderBookings();
+    if (section === "reviews") renderReviews();
+    if (section === "closed") renderClosed();
   }
 
-  function card(r) {
-    const c = el("article", "rcard");
-    const top = el("div", "rtop");
-    const st = el("span", "stars", "★".repeat(r.rating) + "☆".repeat(5 - r.rating)); st.setAttribute("aria-label", r.rating + " out of 5 stars");
-    top.append(st, el("span", "when", "Sent " + sent(r.created_at)));
-    const who = el("p", "who"); who.append(el("strong", null, r.first_name), document.createTextNode(" · " + r.city_country));
-    const meta = el("p", "meta", `Visited ${visit(r.visit_date)} · ${r.service}`);
-    c.append(top, el("blockquote", null, r.review), who, meta);
-    if (r.contact) { const p = el("p", "private"); p.append(el("b", null, "Private contact: "), document.createTextNode(r.contact)); c.append(p); }
+  /* ---------- bookings ---------- */
+  const STATUS = { pending: "New request", confirmed: "Confirmed", arrived: "Checked in", declined: "Declined", cancelled: "Cancelled" };
+  const closedOn = d => closedDays.find(c => c.day === d);
+  function bookingGroups() {
+    const t = today();
+    return {
+      requests: bookings.filter(b => b.status === "pending"),
+      upcoming: bookings.filter(b => b.status === "confirmed" && b.visit_date >= t),
+      past: bookings.filter(b => !(b.status === "pending" || (b.status === "confirmed" && b.visit_date >= t))).slice().reverse()
+    };
+  }
+  $$("#sec-bookings .tabs button").forEach(b => b.onclick = () => { bTab = b.dataset.tab; renderBookings(); });
+  function renderBookings() {
+    const g = bookingGroups();
+    $("#c-requests").textContent = g.requests.length; $("#c-upcoming").textContent = g.upcoming.length; $("#c-past").textContent = g.past.length;
+    $$("#sec-bookings .tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === bTab));
+    const list = $("#b-list"), items = g[bTab];
+    if (!items.length) {
+      list.replaceChildren(el("p", "empty", { requests: "No new booking requests. New ones will show up here.", upcoming: "No confirmed bookings coming up.", past: "Nothing here yet. Checked-in, declined and cancelled bookings show up here." }[bTab]));
+      return;
+    }
+    list.replaceChildren(...items.map(bookingCard));
+  }
+  function waLink(b) {
+    let d = (b.phone || "").replace(/\D/g, "");
+    if (d.length === 7) d = "501" + d;
+    if (d.length < 8) return null;
+    const msg = `Hi ${b.name}, this is Champagne Island about your booking ${b.ref} for ${b.service} on ${niceDay(b.visit_date)}.`;
+    return `https://wa.me/${d}?text=${encodeURIComponent(msg)}`;
+  }
+  function bookingCard(b) {
+    const c = el("article", "rcard bcard s-" + b.status);
+    const t = today(), when = b.visit_date === t ? "Today" : b.visit_date === addDays(t, 1) ? "Tomorrow" : "";
+    const top = el("div", "rtop"); top.append(el("span", "pill", STATUS[b.status]), el("span", "ref", b.ref));
+    const date = el("p", "bdate"); date.append(document.createTextNode(niceDay(b.visit_date))); if (when) date.append(el("span", "soon", when));
+    const what = el("p", "bwhat", `${b.service} · ${b.group_size} ${b.group_size === 1 ? "person" : "people"}` + (b.nights ? ` · ${b.nights} night${b.nights > 1 ? "s" : ""}` : ""));
+    c.append(top, date, what);
+    if (closedOn(b.visit_date) && ["pending", "confirmed"].includes(b.status)) c.append(el("p", "warn", "This date is marked as closed. Contact the guest."));
+    const who = el("div", "bwho");
+    who.append(el("strong", null, b.name));
+    const links = el("div", "blinks");
+    const wa = waLink(b);
+    if (wa) { const a = el("a", "bchip wa", "WhatsApp"); a.href = wa; a.target = "_blank"; a.rel = "noopener"; links.append(a); }
+    const call = el("a", "bchip", "Call " + b.phone); call.href = "tel:" + b.phone.replace(/[^\d+]/g, ""); links.append(call);
+    if (b.email) { const m = el("a", "bchip", b.email); m.href = `mailto:${b.email}?subject=${encodeURIComponent("Your Champagne Island booking " + b.ref)}`; links.append(m); }
+    who.append(links); c.append(who);
+    if (b.notes) c.append(el("blockquote", "bnotes", b.notes));
+    c.append(el("p", "meta", `Sent ${niceTime(b.created_at)}` + (b.handled_by ? ` · last updated by ${b.handled_by}` : "")));
 
     const acts = el("div", "acts");
-    const main = el("button", "btn small", r.approved ? "Hide from website" : "Approve");
-    if (r.approved) main.classList.add("plain");
-    main.onclick = () => act(r, main, () => db(`reviews?id=eq.${r.id}&select=id`, { method: "PATCH", headers: { Prefer: "return=representation" }, body: JSON.stringify({ approved: !r.approved }) }),
-      rows => { r.approved = !r.approved; say(r.approved ? `${r.first_name}'s review is now on the website.` : `${r.first_name}'s review is hidden.`); });
-    const del = el("button", "btn small danger", "Delete");
-    del.onclick = () => {
-      if (del.dataset.armed !== "1") { del.dataset.armed = "1"; del.textContent = "Tap again to delete"; setTimeout(() => { del.dataset.armed = ""; del.textContent = "Delete"; }, 3500); return; }
-      act(r, del, () => db(`reviews?id=eq.${r.id}&select=id`, { method: "DELETE", headers: { Prefer: "return=representation" } }),
-        () => { reviews = reviews.filter(x => x !== r); say("Review deleted."); });
+    const setStatus = (label, status, cls, msg, confirm2) => {
+      const btn = el("button", "btn small" + (cls ? " " + cls : ""), label);
+      const run = () => { btn.disabled = true; change(`bookings?id=eq.${b.id}&select=id,status,handled_by,updated_at`, "PATCH", { status })
+        .then(([row]) => { Object.assign(b, row); say(msg); render(); }).catch(err => { btn.disabled = false; failed(err); }); };
+      if (confirm2) twoTap(btn, label, run); else btn.onclick = run;
+      acts.append(btn);
     };
-    acts.append(main, del); c.append(acts);
+    if (b.status === "pending") { setStatus("Confirm", "confirmed", "", `${b.ref} confirmed. Let ${b.name} know.`); setStatus("Decline", "declined", "plain", `${b.ref} declined.`, true); }
+    if (b.status === "confirmed") { setStatus("Check in", "arrived", "", `${b.name} checked in.`); setStatus("Cancel", "cancelled", "plain", `${b.ref} cancelled.`, true); }
+    if (b.status === "arrived") setStatus("Undo check-in", "confirmed", "plain", "Check-in undone.");
+    if (b.status === "declined" || b.status === "cancelled") setStatus("Move back to requests", "pending", "plain", `${b.ref} is back in requests.`);
+    if (isOwner()) {
+      const del = el("button", "btn small danger", "Delete");
+      twoTap(del, "Delete", () => { del.disabled = true; change(`bookings?id=eq.${b.id}&select=id`, "DELETE")
+        .then(() => { bookings = bookings.filter(x => x !== b); say("Booking deleted."); render(); }).catch(err => { del.disabled = false; failed(err); }); });
+      acts.append(del);
+    }
+    c.append(acts);
     return c;
   }
 
-  async function act(r, btn, call, done) {
-    btn.disabled = true;
-    try {
-      const rows = await call();
-      if (!rows || !rows.length) throw new Error("no change");
-      done(rows); render();
-    } catch (err) {
-      btn.disabled = false;
-      if (err.status === 401) { save(null); show(false); return loginError("Please sign in again."); }
-      say("That didn't work. Refresh and try again.", true);
+  /* ---------- reviews ---------- */
+  $$("#sec-reviews .tabs button").forEach(b => b.onclick = () => { rTab = b.dataset.tab; renderReviews(); });
+  function renderReviews() {
+    const waiting = reviews.filter(r => !r.approved), live = reviews.filter(r => r.approved);
+    $("#c-new").textContent = waiting.length; $("#c-live").textContent = live.length;
+    $$("#sec-reviews .tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === rTab));
+    const items = rTab === "new" ? waiting : live, list = $("#r-list");
+    if (!items.length) return list.replaceChildren(el("p", "empty", rTab === "new" ? "No new reviews right now. New ones will show up here." : "No reviews on the website yet. Approve one from New reviews."));
+    list.replaceChildren(...items.map(reviewCard));
+  }
+  function reviewCard(r) {
+    const c = el("article", "rcard");
+    const top = el("div", "rtop");
+    const st = el("span", "stars", "★".repeat(r.rating) + "☆".repeat(5 - r.rating)); st.setAttribute("aria-label", r.rating + " out of 5 stars");
+    top.append(st, el("span", "when", "Sent " + niceTime(r.created_at)));
+    const who = el("p", "who"); who.append(el("strong", null, r.first_name), document.createTextNode(" · " + r.city_country));
+    c.append(top, el("blockquote", null, r.review), who, el("p", "meta", `Visited ${ym(r.visit_date)} · ${r.service}`));
+    if (r.contact) { const p = el("p", "private"); p.append(el("b", null, "Private contact: "), document.createTextNode(r.contact)); c.append(p); }
+    const acts = el("div", "acts");
+    const main = el("button", "btn small" + (r.approved ? " plain" : ""), r.approved ? "Hide from website" : "Approve");
+    main.onclick = () => { main.disabled = true; change(`reviews?id=eq.${r.id}&select=id`, "PATCH", { approved: !r.approved })
+      .then(() => { r.approved = !r.approved; say(r.approved ? `${r.first_name}'s review is now on the website.` : `${r.first_name}'s review is hidden.`); render(); })
+      .catch(err => { main.disabled = false; failed(err); }); };
+    acts.append(main);
+    if (isOwner()) {
+      const del = el("button", "btn small danger", "Delete");
+      twoTap(del, "Delete", () => { del.disabled = true; change(`reviews?id=eq.${r.id}&select=id`, "DELETE")
+        .then(() => { reviews = reviews.filter(x => x !== r); say("Review deleted."); render(); }).catch(err => { del.disabled = false; failed(err); }); });
+      acts.append(del);
     }
+    c.append(acts);
+    return c;
   }
 
-  document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => { tab = b.dataset.tab; render(); });
-  $("#refresh").onclick = load;
+  /* ---------- closed days (owner) ---------- */
+  $("#closed-form").addEventListener("submit", e => {
+    e.preventDefault();
+    const day = $("#cd-day").value, noteTxt = $("#cd-note").value.trim();
+    if (!day) return say("Choose a date to close.", true);
+    if (day < today()) return say("Choose today or a future date.", true);
+    const btn = $("#closed-form button"); btn.disabled = true;
+    change("closed_days?select=day,note", "POST", { day, note: noteTxt || null })
+      .then(([row]) => { closedDays.push(row); closedDays.sort((a, b) => a.day < b.day ? -1 : 1); $("#cd-day").value = ""; $("#cd-note").value = ""; say(`${niceDay(day)} is now closed.`); render(); })
+      .catch(err => err.code === "23505" ? say("That day is already closed.", true) : failed(err))
+      .finally(() => btn.disabled = false);
+  });
+  function renderClosed() {
+    $("#cd-day").min = today();
+    const list = $("#cd-list");
+    if (!closedDays.length) return list.replaceChildren(el("p", "empty", "No closed days coming up. The island is open every day."));
+    list.replaceChildren(...closedDays.map(c => {
+      const row = el("div", "cdrow");
+      const txt = el("div"); txt.append(el("strong", null, niceDay(c.day)), el("span", null, c.note || "No reason shown to guests"));
+      const active = bookings.filter(b => b.visit_date === c.day && ["pending", "confirmed"].includes(b.status)).length;
+      if (active) txt.append(el("span", "warn", `${active} booking${active > 1 ? "s" : ""} on this day. Contact ${active > 1 ? "those guests" : "the guest"}.`));
+      const btn = el("button", "btn small plain", "Reopen");
+      btn.onclick = () => { btn.disabled = true; change(`closed_days?day=eq.${c.day}&select=day`, "DELETE")
+        .then(() => { closedDays = closedDays.filter(x => x !== c); say(`${niceDay(c.day)} is open again.`); render(); }).catch(err => { btn.disabled = false; failed(err); }); };
+      row.append(txt, btn);
+      return row;
+    }));
+  }
+
+  /* ---------- site content (owner) ---------- */
+  const SERVICES = [["overnight-accommodation","Overnight accommodation","BZ$150","per person, per night","Sleeps: [add capacity]"],["day-trippers","Day trippers","BZ$60","per person","Hours: [add hours]"],["private-venues","Private venues","From BZ$800","per event","Capacity: [add guest count]"],["upscale-camping","Upscale camping","BZ$120","per tent, per night","Sleeps: [add capacity]"],["retreats","Retreats","From BZ$250","per person, per night","Group size: [add range]"],["nature-trails","Nature trails","BZ$25","per person, guided","Duration: [add duration]"],["medicinal-trails","Medicinal trails","BZ$30","per person, guided","Duration: [add duration]"],["fruit-trails","Fruit trails","BZ$30","per person, guided","Duration: [add duration]"],["birding","Birding","BZ$40","per person, guided","Best time: [add best time]"],["recreational-fishing","Recreational fishing","BZ$80","per person","Duration: [add duration]"],["tour-packages","Tour packages","From BZ$120","per person","Duration: [add duration]"],["water-recreation-rentals","Water recreation rentals","BZ$20","per hour","Availability: [add details]"]];
+  function field(key, label, def, opts = {}) {
+    const w = el("label", "cf"); w.append(el("span", null, label));
+    const input = el(opts.area ? "textarea" : "input"); input.dataset.key = key; input.maxLength = opts.max || 200;
+    if (opts.area) input.rows = opts.rows || 2;
+    input.placeholder = def ? "Website shows: " + def : "Not set";
+    w.append(input);
+    if (opts.help) w.append(el("small", null, opts.help));
+    return w;
+  }
+  function buildContent() {
+    const f = $("#content-form"); if (f.dataset.built) return; f.dataset.built = "1";
+    const g1 = el("fieldset", "cgroup"); g1.append(el("legend", null, "Announcement"),
+      field("announcement", "Message at the bottom of every page", "", { area: true, max: 200, help: "For example: \"Closed Dec 24 to 26 for the holidays.\" Leave empty to hide it." }));
+    const g2 = el("fieldset", "cgroup"); g2.append(el("legend", null, "Contact"),
+      field("contact.phone", "Phone / WhatsApp", "", { max: 30, help: "Shown in Contact on the homepage and on Plan your visit." }),
+      field("contact.directions", "Getting here", "A short boat ride from the mainland, within sight of the Placencia Peninsula.", { area: true, rows: 3, max: 400 }));
+    const g3 = el("fieldset", "cgroup"); g3.append(el("legend", null, "Service prices and details"),
+      el("p", "hint", "Leave a box empty to keep what the website shows now. When you set a price, its label changes from \"Sample price\" to \"Price\"."));
+    SERVICES.forEach(([slug, name, price, per, detail]) => {
+      const d = el("details", "svcbox"); d.append(el("summary", null, name));
+      const row = el("div", "svcrow");
+      row.append(field("price." + slug, "Price", price, { max: 40 }), field("per." + slug, "Price note", per, { max: 60 }), field("detail." + slug, "Details line", detail, { max: 120 }));
+      d.append(row); g3.append(d);
+    });
+    f.prepend(g1, g2, g3);
+  }
+  function fillContent() {
+    buildContent();
+    $$("#content-form [data-key]").forEach(i => { i.value = (content[i.dataset.key] && content[i.dataset.key].value) || ""; i.dataset.saved = i.value; });
+    const latest = Object.values(content).filter(x => x.value).sort((a, b) => a.updated_at < b.updated_at ? 1 : -1)[0];
+    $("#content-saved").textContent = latest ? `Last saved ${niceTime(latest.updated_at)}` + (latest.updated_by ? ` by ${latest.updated_by}` : "") : "";
+  }
+  $("#content-form").addEventListener("submit", e => {
+    e.preventDefault();
+    const changed = $$("#content-form [data-key]").filter(i => i.value.trim() !== i.dataset.saved).map(i => ({ key: i.dataset.key, value: i.value.trim() }));
+    if (!changed.length) return say("Nothing to save. You haven't changed anything.");
+    const btn = $("#content-form button[type=submit]"); btn.disabled = true; btn.textContent = "Saving...";
+    db("site_content?on_conflict=key&select=key,value,updated_at,updated_by", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(changed) })
+      .then(rows => { rows.forEach(x => content[x.key] = x); fillContent(); say(`Saved ${rows.length} change${rows.length > 1 ? "s" : ""}. The website is updated.`); })
+      .catch(failed).finally(() => { btn.disabled = false; btn.textContent = "Save changes"; });
+  });
 
   /* ---------- start ---------- */
   async function start() {
     try {
-      const me = await db("admins?select=username,role");
-      if (!me.length) { save(null); show(false); return loginError("This account doesn't have owner access."); }
-      $("#me").textContent = me[0].username;
-      show(true); load();
+      const rows = await db("admins?select=username,role");
+      if (!rows.length) return signedOut("This account doesn't have access to the owner page.");
+      me = rows[0];
+      $("#me").textContent = me.username + (isOwner() ? "" : " (staff)");
+      $$("[data-owner]").forEach(x => x.hidden = !isOwner());
+      show(true); go(section); loadAll();
     } catch (err) {
-      save(null); show(false);
-      if (err.status !== 401) loginError("Could not reach the database. Check your internet and try again.");
+      signedOut(err.status === 401 ? "" : "Could not reach the database. Check your internet and try again.");
     }
   }
 

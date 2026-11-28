@@ -17,7 +17,8 @@
   .abar .brand small{font:500 .85rem var(--bd);opacity:.75;margin-left:.2rem}
   .whoami{display:flex;align-items:center;gap:.8rem;font-size:.92rem}
   .linkbtn{background:none;border:1.5px solid rgba(255,255,255,.5);color:#fff;font:600 .9rem var(--bd);padding:.45rem .9rem;border-radius:999px;cursor:pointer}
-  main{flex:1;padding:clamp(1.5rem,5vw,3rem) 0}
+  main{flex:1;padding:0 0 clamp(1.5rem,5vw,3rem)}
+  #login{padding-top:clamp(1.5rem,5vw,3rem)!important}
   [hidden]{display:none!important}
   main section{padding:0}
 
@@ -39,7 +40,7 @@
   .tabs button{font:700 .95rem var(--bd);padding:.6rem 1.1rem;border-radius:999px;border:1.5px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
   .tabs button[aria-selected="true"]{background:var(--lagoon);border-color:var(--lagoon);color:#fff}
   .tabs .n{display:inline-block;min-width:1.5em;margin-left:.35rem;padding:0 .4em;border-radius:999px;background:var(--sun);color:var(--ink);font-size:.82rem;text-align:center}
-  #list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:1rem}
+  .list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:1rem}
   .rcard{background:var(--card);border-radius:20px;padding:1.3rem 1.4rem;display:flex;flex-direction:column;gap:.6rem}
   .rtop{display:flex;justify-content:space-between;align-items:center;gap:.6rem}
   .stars{color:var(--sun);letter-spacing:.1em;font-size:1.1rem}
@@ -57,7 +58,55 @@
   .empty{grid-column:1/-1;background:var(--card);border:2px dashed var(--line);border-radius:20px;padding:2rem;text-align:center;color:var(--soft);margin:0}
   .note{position:fixed;left:50%;bottom:1.2rem;transform:translateX(-50%);background:var(--palm);color:#fff;padding:.75rem 1.2rem;border-radius:999px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.18);max-width:calc(100% - 2rem);text-align:center;z-index:9}
   .note.bad{background:var(--hib)}
-  @media (max-width:560px){.abar .brand small{display:none}.whoami span{display:none}}
+  /* section nav */
+  .snav{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  .snav .wrap{display:flex;gap:.3rem;overflow-x:auto;scrollbar-width:none}
+  .snav button{flex:none;font:700 .95rem var(--bd);padding:1rem .9rem;border:0;border-bottom:3px solid transparent;background:none;color:var(--soft);cursor:pointer;display:flex;align-items:center;gap:.4rem}
+  .snav button[aria-current="page"]{color:var(--lagoon);border-bottom-color:var(--lagoon)}
+  .snav .n{display:inline-block;min-width:1.4em;padding:0 .35em;border-radius:999px;background:var(--hib);color:#fff;font-size:.78rem;text-align:center}
+  .btn.small.plain{background:transparent;border-color:var(--lagoon);color:var(--lagoon)}
+  /* bookings */
+  .bcard{border-left:5px solid var(--sun)}
+  .bcard.s-confirmed{border-left-color:var(--palm)}.bcard.s-arrived{border-left-color:var(--lagoon)}
+  .bcard.s-declined,.bcard.s-cancelled{border-left-color:var(--line);opacity:.85}
+  .pill{font-size:.8rem;font-weight:700;padding:.2rem .65rem;border-radius:999px;background:#FDF0D8;color:#8a5a00}
+  .s-confirmed .pill{background:#E3F0E6;color:var(--palm)}.s-arrived .pill{background:#DDEEEE;color:var(--lagoon)}
+  .s-declined .pill,.s-cancelled .pill{background:var(--sand);color:var(--soft)}
+  .ref{font:700 .9rem var(--bd);letter-spacing:.06em;color:var(--soft)}
+  .bdate{font:600 1.35rem/1.2 var(--hd)!important;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+  .soon{font:700 .78rem var(--bd);background:var(--sun);color:var(--ink);padding:.15rem .55rem;border-radius:999px}
+  .bwhat{font-weight:600}
+  .bwho{display:grid;gap:.45rem}
+  .blinks{display:flex;flex-wrap:wrap;gap:.4rem}
+  .bchip{font-size:.85rem;font-weight:600;padding:.3rem .7rem;border-radius:999px;border:1.5px solid var(--line);color:var(--ink);text-decoration:none;word-break:break-all}
+  .bchip.wa{background:#25D366;border-color:#25D366;color:#fff}
+  .bnotes{margin:0;font:400 .93rem/1.5 var(--bd)!important;background:var(--sand);border-radius:10px;padding:.55rem .75rem;color:var(--soft)}
+  .warn{color:var(--hib)!important;font-weight:600;font-size:.88rem!important}
+  /* closed days */
+  .twocol{display:grid;gap:1.5rem;align-items:start}
+  @media(min-width:860px){.twocol{grid-template-columns:minmax(280px,.8fr) 1.2fr}}
+  .apanel{background:var(--card);border-radius:20px;padding:1.4rem;display:grid;gap:1rem}
+  .apanel h2{font:600 1.3rem var(--hd);margin:0}
+  .cf{display:grid;gap:.35rem;font-weight:700;font-size:.92rem}
+  .cf input,.cf textarea{font:inherit;font-weight:400;color:var(--ink);background:var(--sand);border:1.5px solid var(--line);border-radius:12px;padding:.65rem .85rem;width:100%;box-sizing:border-box}
+  .cf textarea{resize:vertical}
+  .cf small{font-weight:400;color:var(--soft);font-size:.83rem}
+  .cf input:focus,.cf textarea:focus{outline:2px solid var(--lagoon);outline-offset:1px}
+  #cd-list{display:grid;gap:.6rem}
+  .cdrow{background:var(--card);border-radius:16px;padding:.9rem 1.1rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}
+  .cdrow div{display:grid;gap:.15rem}.cdrow div span{color:var(--soft);font-size:.9rem}
+  /* site content */
+  #content-form{display:grid;gap:1.2rem;max-width:860px}
+  .cgroup{border:0;margin:0;padding:1.4rem;background:var(--card);border-radius:20px;display:grid;gap:1rem;min-width:0}
+  .cgroup legend{float:left;width:100%;padding:0;font:600 1.3rem var(--hd)}
+  .hint{margin:0;color:var(--soft);font-size:.9rem}
+  .svcbox{border:1.5px solid var(--line);border-radius:14px;background:#fff}
+  .svcbox summary{cursor:pointer;padding:.8rem 1rem;font-weight:700}
+  .svcrow{display:grid;gap:.8rem;padding:0 1rem 1rem}
+  @media(min-width:700px){.svcrow{grid-template-columns:.8fr 1fr 1.4fr}}
+  .savebar{position:sticky;bottom:0;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;padding:1rem 0;background:linear-gradient(transparent,var(--sand) 30%)}
+  .savebar .btn{cursor:pointer}.savebar span{color:var(--soft);font-size:.88rem}
+  @media (max-width:560px){.abar .brand small{display:none}.whoami span{display:none}.snav button{padding:.9rem .6rem;font-size:.9rem}}
 </style>
 </head>
 <body>
@@ -66,30 +115,71 @@
   <div class="whoami" id="whoami" hidden><span>Signed in as <b id="me"></b></span><button class="linkbtn" id="signout" type="button">Sign out</button></div>
 </div></header>
 
-<main><div class="wrap">
+<main id="main">
+  <div class="wrap">
   <section id="login" hidden>
     <form class="login" id="login-form" autocomplete="on">
       <h1>Owner sign in</h1>
-      <p>Approve and manage guest reviews.</p>
+      <p>Manage bookings, reviews and the website.</p>
       <label>Username<input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
       <label>Password<input id="password" name="password" type="password" autocomplete="current-password" required></label>
       <p class="err" id="login-msg" role="alert" hidden></p>
       <button class="btn" type="submit">Sign in</button>
     </form>
   </section>
+  </div>
 
-  <section id="app" hidden>
-    <div class="head">
-      <div><h1>Guest reviews</h1><p>Approve a review to show it on the website. Contact details are never shown publicly.</p></div>
-      <button class="btn small plain" id="refresh" type="button" style="background:transparent;border-color:var(--lagoon);color:var(--lagoon);cursor:pointer">Refresh</button>
+  <div id="app" hidden>
+    <nav class="snav" aria-label="Owner sections"><div class="wrap">
+      <button type="button" data-sec="bookings" aria-current="page">Bookings <span class="n" id="n-bookings" hidden></span></button>
+      <button type="button" data-sec="reviews">Reviews <span class="n" id="n-reviews" hidden></span></button>
+      <button type="button" data-sec="closed" data-owner hidden>Closed days</button>
+      <button type="button" data-sec="content" data-owner hidden>Site content</button>
+    </div></nav>
+
+    <div class="wrap" style="padding-top:clamp(1.5rem,4vw,2.5rem)">
+      <section class="sec" id="sec-bookings">
+        <div class="head"><div><h1>Bookings</h1><p>Confirm new requests, then contact the guest by WhatsApp or phone. Nothing is paid online.</p></div>
+          <button class="btn small plain" id="refresh" type="button">Refresh</button></div>
+        <div class="tabs" role="tablist">
+          <button type="button" role="tab" data-tab="requests" aria-selected="true">New requests<span class="n" id="c-requests">0</span></button>
+          <button type="button" role="tab" data-tab="upcoming" aria-selected="false">Upcoming<span class="n" id="c-upcoming">0</span></button>
+          <button type="button" role="tab" data-tab="past" aria-selected="false">Past and closed<span class="n" id="c-past">0</span></button>
+        </div>
+        <div id="b-list" class="list"></div>
+      </section>
+
+      <section class="sec" id="sec-reviews" hidden>
+        <div class="head"><div><h1>Guest reviews</h1><p>Approve a review to show it on the website. Contact details are never shown publicly.</p></div></div>
+        <div class="tabs" role="tablist">
+          <button type="button" role="tab" data-tab="new" aria-selected="true">New reviews<span class="n" id="c-new">0</span></button>
+          <button type="button" role="tab" data-tab="live" aria-selected="false">On the website<span class="n" id="c-live">0</span></button>
+        </div>
+        <div id="r-list" class="list"></div>
+      </section>
+
+      <section class="sec" id="sec-closed" hidden>
+        <div class="head"><div><h1>Closed days</h1><p>Guests can't request a booking on a closed day, and the booking page lists them.</p></div></div>
+        <div class="twocol">
+          <form class="apanel" id="closed-form">
+            <h2>Close a day</h2>
+            <label class="cf"><span>Date</span><input id="cd-day" type="date" required></label>
+            <label class="cf"><span>Reason shown to guests (optional)</span><input id="cd-note" maxlength="120" placeholder="e.g. Private event, Bad weather"></label>
+            <button class="btn" type="submit" style="justify-content:center;cursor:pointer">Close this day</button>
+          </form>
+          <div id="cd-list"></div>
+        </div>
+      </section>
+
+      <section class="sec" id="sec-content" hidden>
+        <div class="head"><div><h1>Site content</h1><p>Change prices, details and contact info on the website. Changes show up as soon as you save.</p></div></div>
+        <form id="content-form">
+          <div class="savebar"><button class="btn" type="submit">Save changes</button><span id="content-saved"></span></div>
+        </form>
+      </section>
     </div>
-    <div class="tabs" role="tablist">
-      <button type="button" role="tab" data-tab="new" aria-selected="true">New reviews<span class="n" id="count-new">0</span></button>
-      <button type="button" role="tab" data-tab="live" aria-selected="false">On the website<span class="n" id="count-live">0</span></button>
-    </div>
-    <div id="list"></div>
-  </section>
-</div></main>
+  </div>
+</main>
 <p class="note" id="note" role="status" hidden></p>
 
 <script src="supabase-config.js"></script>
