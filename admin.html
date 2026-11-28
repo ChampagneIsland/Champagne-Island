@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Owner page | Champagne Island</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml"><link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png"><link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  body{min-height:100vh;display:flex;flex-direction:column}
+  .abar{background:var(--deep);color:#fff}
+  .abar .wrap{display:flex;align-items:center;justify-content:space-between;gap:1rem;min-height:68px}
+  .abar .brand{display:flex;align-items:center;gap:.7rem;color:#fff;text-decoration:none;font:600 1.25rem var(--hd)}
+  .abar .brand small{font:500 .85rem var(--bd);opacity:.75;margin-left:.2rem}
+  .whoami{display:flex;align-items:center;gap:.8rem;font-size:.92rem}
+  .linkbtn{background:none;border:1.5px solid rgba(255,255,255,.5);color:#fff;font:600 .9rem var(--bd);padding:.45rem .9rem;border-radius:999px;cursor:pointer}
+  main{flex:1;padding:clamp(1.5rem,5vw,3rem) 0}
+  [hidden]{display:none!important}
+  main section{padding:0}
+
+  /* sign in */
+  .login{max-width:400px;margin:clamp(1rem,8vh,5rem) auto 0;background:var(--card);border-radius:24px;padding:2rem;display:grid;gap:1.1rem;box-shadow:0 10px 30px rgba(9,59,61,.08)}
+  .login h1{font:600 1.9rem/1.15 var(--hd);margin:0}
+  .login p{margin:0;color:var(--soft);font-size:.95rem}
+  .login label{display:grid;gap:.35rem;font-weight:700;font-size:.95rem}
+  .login input{font:inherit;font-weight:400;color:var(--ink);background:var(--sand);border:1.5px solid var(--line);border-radius:12px;padding:.75rem .9rem;width:100%;box-sizing:border-box}
+  .login input:focus{outline:2px solid var(--lagoon);outline-offset:1px}
+  .login .btn{justify-content:center;cursor:pointer;width:100%}
+  .err{background:#F8E1E8;color:var(--hib);padding:.75rem 1rem;border-radius:12px;font-weight:600;font-size:.93rem}
+
+  /* reviews */
+  .head{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:1rem;margin-bottom:1.4rem}
+  .head h1{font:600 clamp(1.8rem,4vw,2.4rem)/1.1 var(--hd);margin:0}
+  .head p{margin:.4rem 0 0;color:var(--soft)}
+  .tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1.2rem}
+  .tabs button{font:700 .95rem var(--bd);padding:.6rem 1.1rem;border-radius:999px;border:1.5px solid var(--line);background:transparent;color:var(--ink);cursor:pointer}
+  .tabs button[aria-selected="true"]{background:var(--lagoon);border-color:var(--lagoon);color:#fff}
+  .tabs .n{display:inline-block;min-width:1.5em;margin-left:.35rem;padding:0 .4em;border-radius:999px;background:var(--sun);color:var(--ink);font-size:.82rem;text-align:center}
+  #list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:1rem}
+  .rcard{background:var(--card);border-radius:20px;padding:1.3rem 1.4rem;display:flex;flex-direction:column;gap:.6rem}
+  .rtop{display:flex;justify-content:space-between;align-items:center;gap:.6rem}
+  .stars{color:var(--sun);letter-spacing:.1em;font-size:1.1rem}
+  .when{color:var(--soft);font-size:.82rem}
+  .rcard blockquote{margin:0;font:500 1.08rem/1.5 var(--hd)}
+  .rcard p{margin:0;font-size:.93rem}
+  .who{color:var(--ink)}.meta{color:var(--soft)}
+  .private{background:var(--sand);border-radius:10px;padding:.5rem .75rem;color:var(--soft);font-size:.88rem!important;word-break:break-word}
+  .acts{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:auto;padding-top:.5rem}
+  .acts .btn{cursor:pointer}
+  .acts .btn.plain{background:transparent;border-color:var(--lagoon);color:var(--lagoon)}
+  .acts .btn.danger{background:transparent;border-color:var(--hib);color:var(--hib)}
+  .acts .btn[data-armed="1"]{background:var(--hib);color:#fff}
+  .acts .btn:disabled{opacity:.55;cursor:wait}
+  .empty{grid-column:1/-1;background:var(--card);border:2px dashed var(--line);border-radius:20px;padding:2rem;text-align:center;color:var(--soft);margin:0}
+  .note{position:fixed;left:50%;bottom:1.2rem;transform:translateX(-50%);background:var(--palm);color:#fff;padding:.75rem 1.2rem;border-radius:999px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.18);max-width:calc(100% - 2rem);text-align:center;z-index:9}
+  .note.bad{background:var(--hib)}
+  @media (max-width:560px){.abar .brand small{display:none}.whoami span{display:none}}
+</style>
+</head>
+<body>
+<header class="abar"><div class="wrap">
+  <a class="brand" href="index.html"><svg viewBox="0 0 64 64" width="34" height="34" aria-hidden="true"><rect width="64" height="64" rx="15" fill="#0E5A5C"/><circle cx="40" cy="36" r="12" fill="#F2A93B"/><path d="M0 44h64v20H0z" fill="#093B3D"/><path d="M0 50h64" stroke="#2c8a8a" stroke-width="2"/><g fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"><path d="M22 52Q25 38 21 24"/><path d="M21 24Q28 18 37 22M21 24Q14 17 6 21M21 24Q22 14 28 10M21 24Q13 26 9 33"/></g></svg>Champagne Island <small>Owner page</small></a>
+  <div class="whoami" id="whoami" hidden><span>Signed in as <b id="me"></b></span><button class="linkbtn" id="signout" type="button">Sign out</button></div>
+</div></header>
+
+<main><div class="wrap">
+  <section id="login" hidden>
+    <form class="login" id="login-form" autocomplete="on">
+      <h1>Owner sign in</h1>
+      <p>Approve and manage guest reviews.</p>
+      <label>Username<input id="username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>
+      <label>Password<input id="password" name="password" type="password" autocomplete="current-password" required></label>
+      <p class="err" id="login-msg" role="alert" hidden></p>
+      <button class="btn" type="submit">Sign in</button>
+    </form>
+  </section>
+
+  <section id="app" hidden>
+    <div class="head">
+      <div><h1>Guest reviews</h1><p>Approve a review to show it on the website. Contact details are never shown publicly.</p></div>
+      <button class="btn small plain" id="refresh" type="button" style="background:transparent;border-color:var(--lagoon);color:var(--lagoon);cursor:pointer">Refresh</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="new" aria-selected="true">New reviews<span class="n" id="count-new">0</span></button>
+      <button type="button" role="tab" data-tab="live" aria-selected="false">On the website<span class="n" id="count-live">0</span></button>
+    </div>
+    <div id="list"></div>
+  </section>
+</div></main>
+<p class="note" id="note" role="status" hidden></p>
+
+<script src="supabase-config.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>
