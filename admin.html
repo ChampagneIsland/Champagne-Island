@@ -106,6 +106,15 @@
   @media(min-width:700px){.svcrow{grid-template-columns:.8fr 1fr 1.4fr}}
   .savebar{position:sticky;bottom:0;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;padding:1rem 0;background:linear-gradient(transparent,var(--sand) 30%)}
   .savebar .btn{cursor:pointer}.savebar span{color:var(--soft);font-size:.88rem}
+  /* team */
+  .tlist{display:grid;gap:1rem}
+  .mcard.off{opacity:.7}
+  .p-owner{background:#DDEEEE;color:var(--lagoon)}.p-staff{background:#FDF0D8;color:#8a5a00}
+  .editbox{display:grid;gap:.8rem;background:var(--sand);border-radius:14px;padding:1rem}
+  .pwrow{display:flex;gap:.4rem}.pwrow input{flex:1;min-width:0}
+  .mini{flex:none;font:600 .82rem var(--bd);padding:0 .7rem;border-radius:10px;border:1.5px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+  .cf select{font:inherit;font-weight:400;color:var(--ink);background:var(--sand);border:1.5px solid var(--line);border-radius:12px;padding:.65rem .85rem;width:100%}
+  .apanel .meta{margin:0;color:var(--soft)}
   @media (max-width:560px){.abar .brand small{display:none}.whoami span{display:none}.snav button{padding:.9rem .6rem;font-size:.9rem}}
 </style>
 </head>
@@ -135,6 +144,8 @@
       <button type="button" data-sec="reviews">Reviews <span class="n" id="n-reviews" hidden></span></button>
       <button type="button" data-sec="closed" data-owner hidden>Closed days</button>
       <button type="button" data-sec="content" data-owner hidden>Site content</button>
+      <button type="button" data-sec="team" data-owner hidden>Team</button>
+      <button type="button" data-sec="account">My account</button>
     </div></nav>
 
     <div class="wrap" style="padding-top:clamp(1.5rem,4vw,2.5rem)">
@@ -176,6 +187,22 @@
         <form id="content-form">
           <div class="savebar"><button class="btn" type="submit">Save changes</button><span id="content-saved"></span></div>
         </form>
+      </section>
+
+      <section class="sec" id="sec-team" hidden>
+        <div class="head"><div><h1>Team</h1><p>Create logins for owners and staff, change passwords, or switch a login off. Staff can manage bookings and approve reviews; owners can do everything.</p></div></div>
+        <div class="twocol">
+          <form class="apanel" id="team-form" autocomplete="off"></form>
+          <div id="team-list" class="tlist"></div>
+        </div>
+      </section>
+
+      <section class="sec" id="sec-account" hidden>
+        <div class="head"><div><h1>My account</h1></div></div>
+        <div class="twocol">
+          <div class="apanel"><h2 id="acc-name"></h2><p class="meta">Username: <b id="acc-user"></b></p><p class="meta" id="acc-role"></p></div>
+          <form class="apanel" id="acc-form" autocomplete="off"></form>
+        </div>
       </section>
     </div>
   </div>

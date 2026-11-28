@@ -20,17 +20,20 @@ Owner page: https://champagneisland.github.io/Champagne-Island/admin.html
   1. `champagne-island-setup.sql` reviews table + keep-alive
   2. `champagne-island-owner-login.sql` owner accounts and approve/delete rules
   3. `champagne-island-bookings.sql` bookings, closed days, site content, owner/staff roles
+  4. `champagne-island-team.sql` team details, switched-off logins, team list
+- `supabase/functions/team/index.ts` Edge Function named `team` (deploy in Supabase > Edge Functions,
+  Verify JWT off). Lets owners create/edit/switch off/delete logins and change passwords.
 - `.github/workflows/supabase-keep-alive.yml` pings Supabase daily so the free project
   doesn't pause. Needs repo secrets `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
 
-## Owner accounts
+## Team accounts
 
-Owners sign in with a username only. Each account is created in Supabase
-(Authentication > Users > Add user) with the email `champagneisland1+USERNAME@gmail.com`
-and "Auto Confirm User" ticked, then linked in the `admins` table
-(see `champagne-island-owner-login.sql`). Public sign-up is turned off.
+Owners manage logins on the owner page (Team tab): name, username, role, password,
+switch off / on, delete. Everyone can change their own password under My account.
+Behind the scenes a username like `maya` is the Supabase login `champagneisland1+maya@gmail.com`.
 Roles: `owner` can do everything; `staff` can see/confirm/decline bookings, check guests in
-and approve reviews. Adding a staff account is explained at the end of `champagne-island-bookings.sql`.
+and approve reviews. A switched-off login is blocked by Supabase and by the database rules.
+There must always be at least one active owner.
 
 ## Still to fill in
 

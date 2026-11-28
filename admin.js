@@ -75,21 +75,23 @@
     try { save(await auth("password", { email: `${BOX}+${user}@${DOMAIN}`, password: pass })); $("#password").value = ""; await start(); }
     catch (err) {
       save(null);
-      loginError(err.status === 400 || err.status === 401 ? "Wrong username or password." : err.status === 429 ? "Too many tries. Wait a few minutes and try again." : "Could not reach the database. Check your internet and try again.");
+      loginError(/banned/i.test(err.message) ? "This login has been switched off. Ask the owner." : err.status === 400 || err.status === 401 ? "Wrong username or password." : err.status === 429 ? "Too many tries. Wait a few minutes and try again." : "Could not reach the database. Check your internet and try again.");
     } finally { btn.disabled = false; btn.textContent = "Sign in"; }
   });
   $("#signout").addEventListener("click", async () => {
     try { if (session) await fetch(`${URL_}/auth/v1/logout`, { method: "POST", headers: { apikey: KEY, Authorization: "Bearer " + session.access_token } }); } catch (e) {}
-    save(null); bookings = reviews = closedDays = []; show(false);
+    save(null); bookings = reviews = closedDays = team = []; show(false);
   });
 
   /* ---------- sections ---------- */
   function go(name) {
-    if (!isOwner() && (name === "closed" || name === "content")) name = "bookings";
+    if (!isOwner() && ["closed", "content", "team"].includes(name)) name = "bookings";
     section = name;
     $$(".snav button").forEach(b => b.setAttribute("aria-current", b.dataset.sec === name ? "page" : "false"));
     $$(".sec").forEach(s => s.hidden = s.id !== "sec-" + name);
     render();
+    if (name === "team") renderTeam();
+    if (name === "account") renderAccount();
   }
   $$(".snav button").forEach(b => b.onclick = () => go(b.dataset.sec));
   $("#refresh").onclick = () => loadAll();
@@ -104,7 +106,7 @@
         isOwner() ? db("site_content?select=key,value,updated_at,updated_by") : Promise.resolve([])
       ]);
       bookings = b; reviews = r; closedDays = c; content = {}; s.forEach(x => content[x.key] = x);
-      render(); if (isOwner()) fillContent();
+      render(); if (isOwner()) { fillContent(); loadTeam(); }
     } catch (err) {
       if (err.status === 401) return signedOut("Please sign in again.");
       say("Could not load everything. Check your internet and press Refresh.", true);
@@ -298,13 +300,159 @@
       .catch(failed).finally(() => { btn.disabled = false; btn.textContent = "Save changes"; });
   });
 
+  /* ---------- team (owner) and my account (everyone) ---------- */
+  let team = [];
+  async function fn(action, payload) {
+    const token = await freshToken();
+    const res = await fetch(`${URL_}/functions/v1/team`, { method: "POST",
+      headers: { apikey: KEY, Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...payload }) });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401) throw Object.assign(new Error("signed out"), { status: 401 });
+    if (!res.ok || data.error) throw Object.assign(new Error(data.error || (res.status === 404 ? "The team function isn't set up yet in Supabase." : "Something went wrong (" + res.status + ").")), { status: res.status, friendly: true });
+    return data;
+  }
+  const fnFailed = err => err.status === 401 ? signedOut("Please sign in again.") : say(err.friendly ? err.message : "Couldn't reach Supabase. Check your internet and try again.", true);
+  const WORDS = ["palm","lagoon","coconut","sunset","dory","mango","pelican","reef","breeze","hammock","toucan","island","cashew",
+    "manatee","papaya","harbor","jaguar","orchid","cacao","marimba","tapir","heron","coral","pier","guava","banana","lobster",
+    "conch","dolphin","frigate","mangrove","seagrass","bamboo","cohune","kayak","sandbar","starfish","parrot","iguana","hibiscus"];
+  function suggestPassword() {
+    const r = new Uint32Array(4); crypto.getRandomValues(r);
+    const picked = [];
+    for (let i = 0; picked.length < 3; i++) { const w = WORDS[(r[i % 3] + i * 7) % WORDS.length]; if (!picked.includes(w)) picked.push(w); }
+    return picked.join("-") + "-" + (10 + r[3] % 90);
+  }
+  function pwField(id, label) {
+    const w = el("label", "cf"); w.append(el("span", null, label));
+    const row = el("div", "pwrow"); const i = el("input"); i.id = id; i.type = "password"; i.autocomplete = "new-password"; i.minLength = 8; i.maxLength = 72;
+    const showBtn = el("button", "mini", "Show"); showBtn.type = "button";
+    showBtn.onclick = () => { const s = i.type === "password"; i.type = s ? "text" : "password"; showBtn.textContent = s ? "Hide" : "Show"; };
+    const sug = el("button", "mini", "Suggest"); sug.type = "button";
+    sug.onclick = () => { i.value = suggestPassword(); i.type = "text"; showBtn.textContent = "Hide"; };
+    row.append(i, showBtn, sug); w.append(row, el("small", null, "At least 8 characters."));
+    return w;
+  }
+  const ago = s => { if (!s) return "Never signed in"; const m = Math.round((Date.now() - new Date(s)) / 60000);
+    return "Last signed in " + (m < 2 ? "just now" : m < 60 ? m + " min ago" : m < 1440 ? Math.round(m / 60) + " h ago" : niceTime(s)); };
+
+  async function loadTeam() {
+    try { team = await db("rpc/team_list", { method: "POST", body: "{}" }); renderTeam(); }
+    catch (err) { if (err.status === 401) return signedOut("Please sign in again."); $("#team-list").replaceChildren(el("p", "empty", "Couldn't load the team. Press Refresh.")); }
+  }
+
+  function buildTeamForm() {
+    const f = $("#team-form"); if (f.dataset.built) return; f.dataset.built = "1";
+    const name = el("label", "cf"); name.append(el("span", null, "Person's name")); const ni = el("input"); ni.id = "t-name"; ni.maxLength = 80; ni.placeholder = "e.g. Maya Garcia"; name.append(ni);
+    const user = el("label", "cf"); user.append(el("span", null, "Username (what they type to sign in)")); const ui = el("input"); ui.id = "t-user"; ui.maxLength = 30; ui.autocapitalize = "none"; ui.spellcheck = false; ui.placeholder = "e.g. maya"; user.append(ui, el("small", null, "3 to 30 characters: lowercase letters, numbers, dots, dashes or underscores."));
+    ni.addEventListener("input", () => { if (!ui.dataset.touched) ui.value = ni.value.trim().split(/\s+/)[0].toLowerCase().replace(/[^a-z0-9._-]/g, ""); });
+    ui.addEventListener("input", () => { ui.dataset.touched = "1"; });
+    const role = el("label", "cf"); role.append(el("span", null, "Role"));
+    const rs = el("select"); rs.id = "t-role"; rs.append(new Option("Staff: bookings and approving reviews", "staff"), new Option("Owner: everything", "owner")); role.append(rs);
+    const btn = el("button", "btn", "Create login"); btn.type = "submit"; btn.style.justifyContent = "center"; btn.style.cursor = "pointer";
+    f.append(el("h2", null, "Add a person"), name, user, role, pwField("t-pass", "Password"), btn,
+      el("p", "hint", "Give them their username and password in person or by WhatsApp. They can change the password later under My account."));
+    f.addEventListener("submit", async e => {
+      e.preventDefault();
+      const payload = { full_name: ni.value.trim(), username: ui.value.trim().toLowerCase(), role: rs.value, password: $("#t-pass").value };
+      if (!payload.full_name) return say("Enter the person's name.", true);
+      if (!/^[a-z0-9._-]{3,30}$/.test(payload.username)) return say("Check the username: 3 to 30 lowercase letters, numbers, dots, dashes or underscores.", true);
+      if (payload.password.length < 8) return say("The password needs at least 8 characters.", true);
+      btn.disabled = true; btn.textContent = "Creating...";
+      try { await fn("create", payload); say(`${payload.full_name} can now sign in as "${payload.username}".`); f.reset(); delete ui.dataset.touched; $("#t-pass").type = "password"; loadTeam(); }
+      catch (err) { fnFailed(err); } finally { btn.disabled = false; btn.textContent = "Create login"; }
+    });
+  }
+
+  function renderTeam() {
+    buildTeamForm();
+    const list = $("#team-list");
+    if (!team.length) return list.replaceChildren(el("p", "empty", "Loading the team..."));
+    list.replaceChildren(...team.map(memberCard));
+  }
+
+  function memberCard(m) {
+    const self = m.user_id === me.user_id;
+    const c = el("article", "rcard mcard" + (m.active ? "" : " off"));
+    const top = el("div", "rtop");
+    top.append(el("span", "pill " + (m.role === "owner" ? "p-owner" : "p-staff"), m.role === "owner" ? "Owner" : "Staff"),
+      el("span", "when", m.active ? ago(m.last_sign_in_at) : "Login switched off"));
+    const nm = el("p", "bdate", m.full_name || m.username); if (self) nm.append(el("span", "soon", "You"));
+    c.append(top, nm, el("p", "meta", "Signs in as: " + m.username));
+
+    const box = el("div", "editbox"); box.hidden = true;
+    const acts = el("div", "acts");
+    const openBox = (build) => { box.replaceChildren(...build()); box.hidden = false; acts.hidden = true; };
+    const closeBox = () => { box.hidden = true; acts.hidden = false; };
+    const cancel = () => { const b = el("button", "btn small plain", "Cancel"); b.type = "button"; b.onclick = closeBox; return b; };
+    const run = async (btn, action, payload, msg) => {
+      btn.disabled = true;
+      try { await fn(action, { user_id: m.user_id, ...payload }); say(msg); await loadTeam(); }
+      catch (err) { btn.disabled = false; fnFailed(err); }
+    };
+
+    const pw = el("button", "btn small", "Change password");
+    pw.onclick = () => openBox(() => {
+      const save_ = el("button", "btn small", "Save password"); save_.type = "button";
+      save_.onclick = () => { const v = $("#pw-" + m.user_id).value; if (v.length < 8) return say("The password needs at least 8 characters.", true); run(save_, "set_password", { password: v }, `Password changed for ${m.full_name || m.username}. Let them know the new one.`); };
+      const row = el("div", "acts"); row.append(save_, cancel());
+      return [pwField("pw-" + m.user_id, "New password"), row];
+    });
+    const edit = el("button", "btn small plain", "Edit");
+    edit.onclick = () => openBox(() => {
+      const n = el("label", "cf"); n.append(el("span", null, "Name")); const ni = el("input"); ni.value = m.full_name || ""; ni.maxLength = 80; n.append(ni);
+      const u = el("label", "cf"); u.append(el("span", null, "Username")); const ui = el("input"); ui.value = m.username; ui.maxLength = 30; ui.autocapitalize = "none"; u.append(ui);
+      const r = el("label", "cf"); r.append(el("span", null, "Role")); const rs = el("select"); rs.append(new Option("Staff", "staff"), new Option("Owner", "owner")); rs.value = m.role; rs.disabled = self; r.append(rs);
+      if (self) r.append(el("small", null, "You can't change your own role."));
+      const sv = el("button", "btn small", "Save"); sv.type = "button";
+      sv.onclick = () => {
+        const payload = { full_name: ni.value.trim(), username: ui.value.trim().toLowerCase() };
+        if (!self) payload.role = rs.value;
+        if (!/^[a-z0-9._-]{3,30}$/.test(payload.username)) return say("Check the username: 3 to 30 lowercase letters, numbers, dots, dashes or underscores.", true);
+        run(sv, "update", payload, payload.username !== m.username ? `Saved. ${payload.full_name || m.username} now signs in as "${payload.username}".` : "Saved.");
+      };
+      const row = el("div", "acts"); row.append(sv, cancel());
+      return [n, u, r, row];
+    });
+    acts.append(pw, edit);
+    if (!self) {
+      const tog = el("button", "btn small " + (m.active ? "plain" : ""), m.active ? "Switch off login" : "Switch on login");
+      const doTog = () => run(tog, "set_active", { active: !m.active }, m.active ? `${m.full_name || m.username} can't sign in anymore.` : `${m.full_name || m.username} can sign in again.`);
+      if (m.active) twoTap(tog, "Switch off login", doTog); else tog.onclick = doTog;
+      const del = el("button", "btn small danger", "Delete");
+      twoTap(del, "Delete", () => run(del, "delete", {}, `${m.full_name || m.username}'s login was deleted.`));
+      acts.append(tog, del);
+    }
+    c.append(box, acts);
+    return c;
+  }
+
+  function renderAccount() {
+    $("#acc-name").textContent = me.full_name || me.username;
+    $("#acc-user").textContent = me.username;
+    $("#acc-role").textContent = isOwner() ? "Owner: can do everything" : "Staff: bookings and approving reviews";
+    const f = $("#acc-form"); if (f.dataset.built) return; f.dataset.built = "1";
+    const btn = el("button", "btn", "Change my password"); btn.type = "submit"; btn.style.justifyContent = "center"; btn.style.cursor = "pointer";
+    f.append(el("h2", null, "Change my password"), pwField("acc-pass", "New password"), pwField("acc-pass2", "Type it again"), btn);
+    $$("#acc-form .mini:last-child").forEach(b => b.remove()); // no "Suggest" on your own password
+    f.addEventListener("submit", async e => {
+      e.preventDefault();
+      const a = $("#acc-pass").value, b = $("#acc-pass2").value;
+      if (a.length < 8) return say("Your new password needs at least 8 characters.", true);
+      if (a !== b) return say("The two passwords don't match.", true);
+      btn.disabled = true; btn.textContent = "Saving...";
+      try { await fn("set_password", { user_id: me.user_id, password: a }); f.reset(); say("Your password is changed. Use it next time you sign in."); }
+      catch (err) { fnFailed(err); } finally { btn.disabled = false; btn.textContent = "Change my password"; }
+    });
+  }
+
   /* ---------- start ---------- */
   async function start() {
     try {
-      const rows = await db("admins?select=username,role");
+      const rows = await db("admins?select=user_id,username,full_name,role,active");
       if (!rows.length) return signedOut("This account doesn't have access to the owner page.");
+      if (rows[0].active === false) return signedOut("This login has been switched off. Ask the owner.");
       me = rows[0];
-      $("#me").textContent = me.username + (isOwner() ? "" : " (staff)");
+      $("#me").textContent = (me.full_name || me.username) + (isOwner() ? "" : " (staff)");
       $$("[data-owner]").forEach(x => x.hidden = !isOwner());
       show(true); go(section); loadAll();
     } catch (err) {
