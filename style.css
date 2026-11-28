@@ -249,3 +249,7 @@ html.js .rv{opacity:0;transform:translateY(28px);transition:opacity .8s,transfor
 
 /* Anything with the hidden attribute stays hidden, even inside grid/flex layouts */
 [hidden]{display:none!important}
+
+/* Staff sign in link in the menu */
+.signin-link{display:inline-flex;align-items:center;gap:.4rem;opacity:.85}
+.signin-link:hover{opacity:1}

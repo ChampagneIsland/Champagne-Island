@@ -13,7 +13,9 @@ Owner page: https://champagneisland.github.io/Champagne-Island/admin.html
 - `reviews.js` loads approved reviews and sends new ones (homepage)
 - `book.html`, `book.js` booking request page (guests get a reference like CI-7KQ2M; nothing paid online)
 - `content.js` fills in text the owner edits (prices, details, phone, announcement) on every page
-- `admin.html`, `admin.js` owner page: bookings, reviews, closed days, site content
+- `admin.html`, `admin.js` owner page ("Staff sign in" in the site menu): Today view with a 14-day
+  guest strip and any-day lookup, bookings, reviews, history, closed days, site content, team, my account.
+  Checks for new bookings/reviews every 30 seconds and plays a short chime (can be switched off).
 - `images/` resized photos; favicons and `apple-touch-icon.png`
 - `brand/` logo files and the 18 original photos
 - `supabase/` SQL to set up the database (run in Supabase > SQL Editor, in this order):
@@ -21,6 +23,7 @@ Owner page: https://champagneisland.github.io/Champagne-Island/admin.html
   2. `champagne-island-owner-login.sql` owner accounts and approve/delete rules
   3. `champagne-island-bookings.sql` bookings, closed days, site content, owner/staff roles
   4. `champagne-island-team.sql` team details, switched-off logins, team list
+  5. `champagne-island-history.sql` history log (who changed what, when; owners only)
 - `supabase/functions/team/index.ts` Edge Function named `team` (deploy in Supabase > Edge Functions,
   Verify JWT off). Lets owners create/edit/switch off/delete logins and change passwords.
 - `.github/workflows/supabase-keep-alive.yml` pings Supabase daily so the free project
